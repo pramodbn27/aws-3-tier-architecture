@@ -1,0 +1,13 @@
+---
+- hosts: localhost
+  tasks:
+  - name: Simple GET operation
+    amazon.aws.s3_object:
+     bucket: ed-eos-web-data
+     object: nginx.conf
+     dest: /etc/nginx/nginx.conf
+     mode: get
+  - name: restart nginx
+    service:
+      name: nginx
+      state: restarted
