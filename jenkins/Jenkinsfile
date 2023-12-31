@@ -1,0 +1,86 @@
+pipeline {
+  agent any
+     parameters {
+        choice(name: 'ENVIRONMENT', choices: ['dev','qa','perf','prod'], description: 'Select the Environment?')
+        choice(name: 'ACTION', choices: ['create','destroy'], description: 'Select the ACTION?')
+        }
+      environment {
+        GIT_SSH_COMMAND = "ssh -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no"
+      }
+    stages {
+
+      stage ('Checkout SCM'){
+        steps {
+          checkout([$class: 'GitSCM', branches: [[name: '*/master']], doGenerateSubmoduleConfigurations: false, extensions: [], submoduleCfg: [], userRemoteConfigs: [[credentialsId: 'git', url: 'https://dptrealtime@bitbucket.org/dptrealtime/3tier-terraform-deployment.git']]])
+        }
+      }
+
+     
+      stage('Set Terraform path') {
+       steps {
+         script {
+            def tfHome = tool name: 'terraform'
+            env.PATH = "${tfHome}:${env.PATH}:${WORKSPACE}"
+           }
+           sh 'terraform version'
+           sh 'git version'
+         }
+     }
+    stage('Download Terragrunt') {
+       steps {
+         dir ("${ENVIRONMENT}") {
+
+        sh """
+           wget https://github.com/gruntwork-io/terragrunt/releases/download/v0.31.1/terragrunt_linux_amd64
+           mv terragrunt_linux_amd64 terragrunt
+           chmod +x terragrunt
+        """
+         }
+       }
+    }
+
+  stage('Terragrunt Create Plan') {
+    when {
+      expression { params.ACTION == 'create' }
+    }
+       steps {
+           dir (params.ENVIRONMENT) {
+            
+               script {
+                    sh './terragrunt init -no-color'
+                    sh './terragrunt plan -no-color -out=plan.out'
+               }
+            }
+        }
+      }
+stage('Terragrunt Destroy Plan') {
+    when {
+      expression { params.ACTION == 'destroy' }
+    }
+ 
+       steps {
+           dir (params.ENVIRONMENT) {
+            
+               script {
+                    sh './terragrunt init -no-color'
+                    sh './terragrunt plan --destroy -no-color -out=plan.out'
+               }
+            }
+        }
+      }
+
+stage('Terragrunt Apply') { 
+       steps {
+           dir (params.ENVIRONMENT) {
+            
+              script {
+                    sh './terragrunt apply -no-color -auto-approve plan.out'
+                    sh "./terragrunt output > ${WORKSPACE}/output.txt"
+                    sh "rm -rf plan.out"
+              }
+            
+           }
+        }
+      }
+   }
+}
