@@ -1,1 +1,1 @@
-# aws-3-tier-architecture
+# AWS-3-Tier-Architecture
